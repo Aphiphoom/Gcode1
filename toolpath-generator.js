@@ -830,21 +830,31 @@
 
           const n = verts.length;
           if (n < 2) return;
+          const toolDiameter = (tool && tool.diameter) ? tool.diameter : 0;
 
           if (isClosed) {
             // เส้นปิด: ทุก vertex เป็นมุม
             verts.forEach(v => collected.push({ x: v.x, y: v.y }));
           } else {
-            // เส้นเปิด: ข้ามจุดปลาย (index 0 และ n-1) เจาะเฉพาะมุมกลางทาง
+            // เส้นเปิด: เจาะจุดมุมกลางทาง + ปลายของขาที่ยาวกว่า tool.diameter
+            // (ขาที่สั้น <= diameter = "หางสั้น" ไม่เจาะปลาย)
             for (let i = 1; i < n - 1; i++) {
               const prev = verts[i - 1], cur = verts[i], next = verts[i + 1];
-              // vector เข้าสู่จุด (prev→cur) และออกจากจุด (cur→next)
               const inX = cur.x - prev.x, inY = cur.y - prev.y;
               const outX = next.x - cur.x, outY = next.y - cur.y;
               const angle = angleBetween(inX, inY, outX, outY);
-              // เก็บถ้ามุมหักศอก (ทิศเปลี่ยนพอที่จะถือว่าเป็น "มุม")
               if (angle < CORNER_THRESH) {
+                // เจาะจุดมุม
                 collected.push({ x: cur.x, y: cur.y });
+                // เจาะปลายของขาที่ยาวกว่า diameter เท่านั้น
+                const lenIn  = Math.hypot(inX, inY);   // ความยาว segment prev→cur
+                const lenOut = Math.hypot(outX, outY); // ความยาว segment cur→next
+                if (lenIn > toolDiameter) {
+                  collected.push({ x: prev.x, y: prev.y });
+                }
+                if (lenOut > toolDiameter) {
+                  collected.push({ x: next.x, y: next.y });
+                }
               }
             }
           }
