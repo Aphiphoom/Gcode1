@@ -780,44 +780,73 @@
         continue; // ข้าม ents.forEach ด้านล่างทั้งหมด
       }
 
-      // Drill Corners: เจาะทุก vertex จริงของทุก entity ใน layer (ยกเว้นวงกลมล้วน)
-      // รับทั้งเส้นปิดและเส้นเปิด — merge จุดที่ห่าง < 0.1mm ข้ามหลาย entity
+      // Drill Corners: เจาะเฉพาะ vertex ที่เป็น "มุมหักศอก" จริง
+      //   - เส้นปิด: ทุก vertex ถือว่าเป็นมุม (ไม่มีปลาย)
+      //   - เส้นเปิด: เฉพาะ vertex กลางทางที่มุมระหว่าง segment ก่อน-หลัง < CORNER_THRESH
+      //     (จุดปลายของเส้นเปิด = ไม่ใช่มุม ข้าม — ใช้ Drill Endpoints แทน)
+      // รับทั้งเส้นปิดและเส้นเปิด ยกเว้นวงกลมล้วน — merge จุดที่ห่าง < 0.1mm ข้ามหลาย entity
       if (op === 'Drill Corners' || op === 'Drill Endpoints') {
-        const MERGE_TOL = 0.1; // mm — จุดที่ห่างน้อยกว่านี้ถือว่าซ้ำกัน
-        const collected = []; // รายการจุดที่จะเจาะก่อน merge
+        const MERGE_TOL = 0.1;       // mm — ห่างน้อยกว่านี้ถือว่าซ้ำกัน
+        const CORNER_THRESH = 175;   // องศา — มุมระหว่าง segment ที่ถือว่าเป็น "มุม" (< 175° = หักศอก)
+        const collected = [];
+
+        // คำนวณมุมระหว่าง 2 vector (องศา)
+        function angleBetween(ax, ay, bx, by) {
+          const dot = ax * bx + ay * by;
+          const lenA = Math.hypot(ax, ay), lenB = Math.hypot(bx, by);
+          if (lenA < 1e-9 || lenB < 1e-9) return 180;
+          return Math.acos(Math.max(-1, Math.min(1, dot / (lenA * lenB)))) * 180 / Math.PI;
+        }
 
         ents.forEach(ent => {
-          // ข้ามวงกลมล้วน
-          if (fitCircle(ent.points)) return;
+          if (fitCircle(ent.points)) return; // ข้ามวงกลมล้วน
           const pts = ent.points || [];
           if (pts.length < 2) return;
           const isClosed = ent.closed && pts.length >= 4;
 
           if (op === 'Drill Endpoints') {
-            // เฉพาะเส้นเปิด: 2 จุดปลายเท่านั้น
             if (isClosed) return;
             collected.push({ x: pts[0].x, y: pts[0].y });
             collected.push({ x: pts[pts.length - 1].x, y: pts[pts.length - 1].y });
             return;
           }
 
-          // Drill Corners: สกัด vertex จริง (ไม่รวม tessellated arc midpoints)
+          // สร้าง array ของ vertex จริง (ไม่รวม tessellated arc midpoints)
+          let verts = [];
           if (ent.segments && ent.segments.length) {
-            // มี segments: ใช้ startIdx ของทุก segment = vertex จริง (ทั้ง LINE และ ARC endpoints)
             ent.segments.forEach(seg => {
               const p = pts[seg.startIdx];
-              if (p) collected.push({ x: p.x, y: p.y });
+              if (p) verts.push({ x: p.x, y: p.y });
             });
-            // เพิ่มจุดสุดท้ายของ segment สุดท้าย ถ้าเส้นเปิด
             if (!isClosed) {
               const lastSeg = ent.segments[ent.segments.length - 1];
               const p = pts[lastSeg.endIdx];
-              if (p) collected.push({ x: p.x, y: p.y });
+              if (p) verts.push({ x: p.x, y: p.y });
             }
           } else {
-            // ไม่มี segments: ใช้ทุก points (ยกเว้นจุดซ้ำหัว-ท้ายถ้าเส้นปิด)
             const end = isClosed ? pts.length - 1 : pts.length;
-            for (let i = 0; i < end; i++) collected.push({ x: pts[i].x, y: pts[i].y });
+            for (let i = 0; i < end; i++) verts.push({ x: pts[i].x, y: pts[i].y });
+          }
+
+          const n = verts.length;
+          if (n < 2) return;
+
+          if (isClosed) {
+            // เส้นปิด: ทุก vertex เป็นมุม
+            verts.forEach(v => collected.push({ x: v.x, y: v.y }));
+          } else {
+            // เส้นเปิด: ข้ามจุดปลาย (index 0 และ n-1) เจาะเฉพาะมุมกลางทาง
+            for (let i = 1; i < n - 1; i++) {
+              const prev = verts[i - 1], cur = verts[i], next = verts[i + 1];
+              // vector เข้าสู่จุด (prev→cur) และออกจากจุด (cur→next)
+              const inX = cur.x - prev.x, inY = cur.y - prev.y;
+              const outX = next.x - cur.x, outY = next.y - cur.y;
+              const angle = angleBetween(inX, inY, outX, outY);
+              // เก็บถ้ามุมหักศอก (ทิศเปลี่ยนพอที่จะถือว่าเป็น "มุม")
+              if (angle < CORNER_THRESH) {
+                collected.push({ x: cur.x, y: cur.y });
+              }
+            }
           }
         });
 
@@ -829,11 +858,10 @@
           }
         }
 
-        // สร้าง drill operation ต่อจุด
         merged.forEach(pt => {
           operations.push({ kind: 'drill', layer: layerName, toolNumber: map.toolNumber, point: pt, targetZ, passes, tool, ...orderInfo });
         });
-        continue; // ข้าม ents.forEach ด้านล่าง
+        continue;
       }
 
       ents.forEach((ent, entIdx) => {
