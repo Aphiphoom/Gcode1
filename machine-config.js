@@ -23,7 +23,8 @@
     'Engrave',
     'Mark Square',   // เส้นเปิด L-shape สำหรับงาน Bottom: offset ออกด้านนอกตามทิศของมุมที่อยู่
     'Drill Corners', // เจาะทุก vertex จริงของเส้น (ทั้งปิดและเปิด ยกเว้นวงกลม/arc ล้วน)
-    'Drill Endpoints' // เจาะจุดปลาย 2 จุดของเส้นเปิดเท่านั้น (head + tail)
+    'Drill Endpoints', // เจาะจุดปลาย 2 จุดของเส้นเปิดเท่านั้น (head + tail)
+    'Dogbone Female'  // ตัดตามเส้นเฉพาะ segment ที่ยาวกว่า tool diameter (ข้าม notch สั้นๆ)
   ];
 
   // เลเยอร์อ้างอิงจาก ABF/SketchUp ที่ไม่ใช่งานตัด — ไม่แสดงในหน้า Layer และไม่นำไปสร้าง toolpath
