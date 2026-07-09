@@ -903,21 +903,22 @@
             path = ent.points.slice();
           } else {
             const depth = (depths && depths[entIdx] !== undefined) ? depths[entIdx] : 0;
-            const effectiveOutward = (depth % 2 === 1) ? !baseOutward : baseOutward;
+            // nesting detection: สลับ offset direction + cutType ตาม depth (Even-Odd Rule)
+            // ใช้เฉพาะเมื่อ op='Profile Outside' เท่านั้น — ถ้าผู้ใช้ตั้ง Profile Inside
+            // ไว้แล้ว ให้ respect ค่านั้นโดยตรง ไม่ผ่าน nesting (กันกรณี entity หลายชิ้น
+            // แยกกันใน layer เดียวที่ไม่ได้ซ้อนกัน เช่น Dogbone notch แต่ละมุม)
+            const nestingActive = (op === 'Profile Outside') && depth > 0;
+            const effectiveOutward = nestingActive ? !baseOutward : baseOutward;
             const willHaveTabs = !!(map.tabsEnabled && closed);
             const built = buildProfilePath(ent.points, tool.diameter / 2, effectiveOutward, machine.cutDirection, layerName, warnings, willHaveTabs, ent.segments);
             path = built.path; circleMeta = built.circleMeta; arcRanges = built.arcRanges || null;
-            // depth คี่ = รู (ซ้อนอยู่ข้างใน) → reverse path เพื่อให้วิ่งสวนทางชิ้นงานภายนอก
-            // Climb ของรู = CCW ↔ Climb ของขอบนอก = CW (สวนทางกัน)
-            if (depth % 2 === 1 && path && path.length > 1) {
+            // reverse path สำหรับ entity ที่ถูก detect ว่าเป็นรู (depth คี่ + Profile Outside)
+            if (nestingActive && depth % 2 === 1 && path && path.length > 1) {
               path = path.slice().reverse();
               if (arcRanges && arcRanges.length) arcRanges = reverseArcRanges(arcRanges, path.length);
             }
-            // อัปเดต cutType ให้ตรงกับ nesting จริง (Inside สำหรับ depth คี่, Outside สำหรับ depth คู่)
-            // ใช้ต่อเนื่องใน operation push ด้านล่าง
-            if (depth % 2 === 1 && op === 'Profile Outside') ent._nestedCutType = 'Profile Inside';
-            else if (depth % 2 === 0 && op === 'Profile Inside') ent._nestedCutType = 'Profile Outside';
-            else ent._nestedCutType = null;
+            // cutType สุดท้าย: ถ้า nesting active ให้สลับตาม depth คี่/คู่ มิฉะนั้น ใช้ op เดิม
+            ent._nestedCutType = nestingActive && depth % 2 === 1 ? 'Profile Inside' : null;
           }
         } else {
           path = ent.points.slice();
