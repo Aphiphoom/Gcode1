@@ -46,6 +46,31 @@
     return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
   }
 
+  /* ลบจุด collinear ออกจาก polygon — จุดที่อยู่บนเส้นตรงเดียวกับ neighbor ทั้งสองข้าง
+   * (cross product ≈ 0) ไม่มีความหมายในการ offset และทำให้ intersection degenerate
+   * ทำก่อนส่งเข้า offsetPolygon และ makePocket เสมอ
+   * tolerance: พื้นที่สามเหลี่ยมที่ถือว่า collinear (default 1e-4 mm² = ปลอดภัยสำหรับ DXF) */
+  function removeCollinearPoints(ptsIn, tolerance) {
+    const tol = tolerance !== undefined ? tolerance : 1e-4;
+    const pts = stripClosing(ptsIn);
+    const n = pts.length;
+    if (n < 3) return ptsIn;
+    const result = [];
+    for (let i = 0; i < n; i++) {
+      const prev = pts[(i + n - 1) % n];
+      const cur  = pts[i];
+      const next = pts[(i + 1) % n];
+      // cross product ของ vector prev→cur และ cur→next
+      // = 2 × area ของสามเหลี่ยม prev-cur-next
+      const cross = (cur.x - prev.x) * (next.y - prev.y)
+                  - (cur.y - prev.y) * (next.x - prev.x);
+      if (Math.abs(cross) > tol) result.push(cur);
+    }
+    if (result.length < 3) return ptsIn; // ถ้าลบมากเกินไป คืนของเดิม
+    result.push({ x: result[0].x, y: result[0].y }); // ปิดวง
+    return result;
+  }
+
   function offsetPolygon(ptsIn, dist, outward) {
     let pts = stripClosing(ptsIn);
     const n = pts.length;
@@ -306,10 +331,11 @@
 
   /* ===== Pocket ===== */
   function makePocket(pts, toolDia, stepoverPct) {
+    const cleanPts = removeCollinearPoints(pts);
     const stepover = Math.max(0.1, toolDia * (stepoverPct / 100));
     const rings = [];
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const p of pts) {
+    for (const p of cleanPts) {
       if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
       if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
     }
@@ -318,7 +344,7 @@
     let prevArea = Infinity;
     let guard = 0;
     while (guard++ < 500 && dist <= maxDist + stepover) {
-      const ring = offsetPolygon(pts, dist, false);
+      const ring = offsetPolygon(cleanPts, dist, false);
       if (!ring || ring.length < 4) break;
       const area = Math.abs(signedArea(stripClosing(ring)));
       if (area > prevArea + 1e-6) break;
@@ -429,7 +455,7 @@
         warnings.push(`มุมโค้งใน layer "${layerName}" เล็กเกินไปสำหรับมีดนี้ (offset แล้วรัศมีติดลบ) — ใช้เส้นจุดแทน`);
       }
     }
-    const path = applyCutDirection(offsetPolygon(entPoints, toolRadius, effectiveOutward), cutDirection);
+    const path = applyCutDirection(offsetPolygon(removeCollinearPoints(entPoints), toolRadius, effectiveOutward), cutDirection);
     return { path, circleMeta: null };
   }
 
