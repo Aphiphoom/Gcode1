@@ -428,7 +428,7 @@
       op.passes.forEach((zCut, idx) => {
         const isLast = (idx === lastIdx);
         const feedXY = (isLast && finalFeedOverride) ? finalFeedOverride : t.feedXY;
-        if (idx > 0) rapid(startPt.x, startPt.y, undefined);
+        if (idx > 0) feed(startPt.x, startPt.y, undefined, t.feedXY);
         feed(undefined, undefined, zCut, t.feedZ);
         if (op.tabs && op.tabs.length) {
           const pts = tabbedPath(op.path, op.tabs, zCut, op.tabTopZ);
@@ -877,35 +877,31 @@
       rapid(undefined, undefined, safeZ);
       rapid(startRing[0].x, startRing[0].y, undefined);
       rapid(undefined, undefined, clearance);
-      let fromZ = clearance;
+      let pocketFirstPass = true;
       for (const zCut of op.passes) {
-        let ramped = false; // กันกรณีวงในสุดเสื่อมสภาพเป็นจุดเดียว (perimeter≈0) จาก makePocket
+        // วนจาก ring ในสุด → นอกสุด ดิ่งตรง feedZ ที่จุดเริ่มของ pass แล้ววนรอบแบน
+        // ไม่มี ramp ไม่มีวงเก็บลิ่ม ไม่ยก Z ระหว่าง ring และระหว่าง pass
+        let firstRingInPass = true;
         for (let r = op.rings.length - 1; r >= 0; r--) {
           const ring = op.rings[r];
-          feed(ring[0].x, ring[0].y, undefined, t.feedXY);
-          if (!ramped && pathLength(ring) > 0.05) {
-            const rp = rampedPath(ring, fromZ, zCut);
-            for (let i = 1; i < rp.length; i++) feed(rp[i].x, rp[i].y, rp[i].z, t.feedXY);
-            ramped = true;
+          if (!ring || ring.length < 2) continue;
+          if (firstRingInPass && pocketFirstPass) {
+            // pass แรก ring แรก: อยู่ที่ clearance แล้ว ดิ่งตรงลงได้เลย
+            feed(undefined, undefined, zCut, t.feedZ);
+            firstRingInPass = false;
+          } else if (firstRingInPass) {
+            // pass ถัดไป ring แรก: feed กลับจุดเริ่มแล้วดิ่งตรงลง
+            feed(ring[0].x, ring[0].y, undefined, t.feedXY);
+            feed(undefined, undefined, zCut, t.feedZ);
+            firstRingInPass = false;
           } else {
-            feed(undefined, undefined, zCut, t.feedZ); // ตั้ง Z ให้ถูกเสมอแม้วงนี้ไม่ได้ ramp (กันหลุด Z เดิม)
-            for (let i = 1; i < ring.length; i++) feed(ring[i].x, ring[i].y, undefined, t.feedXY);
+            // ring ถัดไปใน pass เดียวกัน: feed ไปจุดเริ่ม ring (Z ยังคงที่)
+            feed(ring[0].x, ring[0].y, undefined, t.feedXY);
           }
+          // วนรอบ ring แบน (Z คงที่)
+          for (let i = 1; i < ring.length; i++) feed(ring[i].x, ring[i].y, zCut, t.feedXY);
         }
-        fromZ = zCut;
-      }
-      // เก็บลิ่มที่ ramp ของวงในสุด (วงเดียวที่ ramp ในแต่ละ pass) — เดินวงในสุดแบบแบนที่ Z สุดท้าย
-      if (op.passes.length) {
-        const zLast = op.passes[op.passes.length - 1];
-        let innerRing = null;
-        for (let r = op.rings.length - 1; r >= 0; r--) {
-          if (pathLength(op.rings[r]) > 0.05) { innerRing = op.rings[r]; break; }
-        }
-        if (innerRing) {
-          feed(innerRing[0].x, innerRing[0].y, undefined, t.feedXY);
-          feed(undefined, undefined, zLast, t.feedZ);
-          for (let i = 1; i < innerRing.length; i++) feed(innerRing[i].x, innerRing[i].y, zLast, t.feedXY);
-        }
+        pocketFirstPass = false;
       }
       rapid(undefined, undefined, safeZ);
       blank();
