@@ -900,6 +900,48 @@
         continue;
       }
 
+      // Dogbone Female: ตัดตามเส้นตรงๆ (ไม่ offset) เฉพาะ segment ที่ยาวกว่า tool diameter
+      // ข้าม segment สั้น (notch/relief) — จัดกลุ่ม segment ยาวติดกันเป็น sub-path เดียว
+      if (op === 'Dogbone Female') {
+        const minLen = (tool && tool.diameter) ? tool.diameter : 6;
+        ents.forEach(ent => {
+          const pts = ent.points || [];
+          if (pts.length < 2) return;
+          // สร้างรายการ segment พร้อม length
+          const segs = [];
+          const count = ent.closed ? pts.length - 1 : pts.length - 1;
+          for (let i = 0; i < count; i++) {
+            const a = pts[i], b = pts[i + 1];
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            segs.push({ startIdx: i, endIdx: i + 1, len });
+          }
+          // จัดกลุ่ม segment ยาว (> minLen) ที่ติดกันเป็น sub-path
+          // segment สั้น (≤ minLen) ถือเป็นตัวแบ่ง sub-path
+          let subPath = null;
+          const flushSub = () => {
+            if (subPath && subPath.length >= 2) {
+              operations.push({
+                kind: 'contour', layer: layerName, toolNumber: map.toolNumber,
+                path: subPath, closed: false, targetZ, passes, tool,
+                circleMeta: null, arcRanges: null,
+                tabs: [], tabTopZ: null, cutType: 'Profile On Line', ...orderInfo
+              });
+            }
+            subPath = null;
+          };
+          segs.forEach(seg => {
+            if (seg.len > minLen) {
+              if (!subPath) subPath = [pts[seg.startIdx]];
+              subPath.push(pts[seg.endIdx]);
+            } else {
+              flushSub();
+            }
+          });
+          flushSub();
+        });
+        continue; // ข้าม ents.forEach ด้านล่าง
+      }
+
       ents.forEach((ent, entIdx) => {
         if (op === 'Drill') {
           const c = (ent.type === 'CIRCLE') ? { x: ent.cx, y: ent.cy } : centroid(ent.points);
