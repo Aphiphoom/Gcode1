@@ -201,7 +201,8 @@
     const throughCuts = [];
     const others = [];
     for (const op of ops) {
-      const isProfile = op.kind === 'contour' && op.cutType && op.cutType.indexOf('Profile') === 0;
+      const isProfile = op.kind === 'contour' &&
+        (op.cutType === 'Profile Outside' || op.cutType === 'Profile Inside');
       const isThrough = typeof op.targetZ === 'number' && op.targetZ <= 0.05;
       if (isProfile && isThrough) throughCuts.push(op);
       else others.push(op);
@@ -236,7 +237,7 @@
   function isThroughCutGroup(ops) {
     return ops.some(op =>
       op.kind === 'contour' &&
-      op.cutType && op.cutType.indexOf('Profile') === 0 &&
+      op.cutType && (op.cutType === 'Profile Outside' || op.cutType === 'Profile Inside') &&
       typeof op.targetZ === 'number' && op.targetZ <= 0.05 // เผื่อ floating point เล็กน้อย
     );
   }
@@ -425,18 +426,38 @@
       rapid(undefined, undefined, safeZ);
       rapid(startPt.x, startPt.y, undefined);
       rapid(undefined, undefined, clearance);
-      op.passes.forEach((zCut, idx) => {
-        const isLast = (idx === lastIdx);
-        const feedXY = (isLast && finalFeedOverride) ? finalFeedOverride : t.feedXY;
-        if (idx > 0) feed(startPt.x, startPt.y, undefined, t.feedXY);
-        feed(undefined, undefined, zCut, t.feedZ);
-        if (op.tabs && op.tabs.length) {
-          const pts = tabbedPath(op.path, op.tabs, zCut, op.tabTopZ);
-          for (let i = 1; i < pts.length; i++) feed(pts[i].x, pts[i].y, pts[i].z, feedXY);
-        } else {
-          emitFlatWithArcs(op.path, op.arcRanges, zCut, feedXY);
-        }
-      });
+
+      if (!op.closed && (!op.tabs || !op.tabs.length)) {
+        // Open path: boustrophedon — สลับทิศทุก pass ไม่กลับจุดเริ่ม
+        // pass คู่ (0,2,4...): forward (path ปกติ)
+        // pass คี่ (1,3,5...): reverse (path กลับหัว)
+        let fwdPath = op.path.slice();
+        let fwdArc = op.arcRanges;
+        op.passes.forEach((zCut, idx) => {
+          const isLast = (idx === lastIdx);
+          const feedXY = (isLast && finalFeedOverride) ? finalFeedOverride : t.feedXY;
+          const forward = (idx % 2 === 0);
+          const curPath = forward ? fwdPath : fwdPath.slice().reverse();
+          const curArc = forward ? fwdArc : (fwdArc ? reverseArcRanges(fwdArc, fwdPath.length) : null);
+          // ดิ่งตรงลงที่ตำแหน่งปัจจุบัน (ต้นหรือปลาย path สลับกัน)
+          feed(undefined, undefined, zCut, t.feedZ);
+          emitFlatWithArcs(curPath, curArc, zCut, feedXY);
+        });
+      } else {
+        // Closed path หรือมี tab: ดิ่งตรงลงทุก pass
+        op.passes.forEach((zCut, idx) => {
+          const isLast = (idx === lastIdx);
+          const feedXY = (isLast && finalFeedOverride) ? finalFeedOverride : t.feedXY;
+          if (idx > 0) feed(startPt.x, startPt.y, undefined, t.feedXY);
+          feed(undefined, undefined, zCut, t.feedZ);
+          if (op.tabs && op.tabs.length) {
+            const pts = tabbedPath(op.path, op.tabs, zCut, op.tabTopZ);
+            for (let i = 1; i < pts.length; i++) feed(pts[i].x, pts[i].y, pts[i].z, feedXY);
+          } else {
+            emitFlatWithArcs(op.path, op.arcRanges, zCut, feedXY);
+          }
+        });
+      }
       rapid(undefined, undefined, safeZ);
       blank();
     }
