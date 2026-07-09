@@ -900,7 +900,61 @@
         continue;
       }
 
-      // Dogbone Female: ตัดตามเส้นตรงๆ (ไม่ offset) เฉพาะ segment ที่ยาวกว่า tool diameter
+      // Dogbone Male: ตัดตาม segment ที่ไม่ซ้อนทับกับ cut_outside_ layer
+      // segment ที่ midpoint อยู่บนเส้น cut_outside → ข้าม
+      // segment ที่ไม่ซ้อน → ตัด (ไม่ offset, วิ่งตามเส้นตรงๆ)
+      if (op === 'Dogbone Male') {
+        const SEG_TOL = 0.5; // tolerance สำหรับ point-on-segment test (mm)
+        // pre-compute cut_outside segments ทั้งหมดครั้งเดียวต่อ layer call
+        const cutOutSegs = [];
+        dxf.entities.forEach(e => {
+          if (!e.layer || !/^cut_outside_/i.test(e.layer)) return;
+          const cpts = e.points || [];
+          for (let ci = 0; ci < cpts.length - 1; ci++) {
+            cutOutSegs.push({ ax: cpts[ci].x, ay: cpts[ci].y, bx: cpts[ci+1].x, by: cpts[ci+1].y });
+          }
+        });
+        function midOnCutSeg(px, py, s) {
+          const dx = s.bx - s.ax, dy = s.by - s.ay, len2 = dx*dx + dy*dy;
+          if (len2 < 1e-9) return false;
+          const t = ((px-s.ax)*dx + (py-s.ay)*dy) / len2;
+          if (t < -0.001 || t > 1.001) return false;
+          return Math.hypot(px - (s.ax+t*dx), py - (s.ay+t*dy)) <= SEG_TOL;
+        }
+        function isOnCutOutside(px, py) {
+          return cutOutSegs.some(s => midOnCutSeg(px, py, s));
+        }
+        ents.forEach(ent => {
+          const pts = ent.points || [];
+          if (pts.length < 2) return;
+          let subPath = null;
+          const flushSub = () => {
+            if (subPath && subPath.length >= 2) {
+              operations.push({
+                kind: 'contour', layer: layerName, toolNumber: map.toolNumber,
+                path: subPath, closed: false, targetZ, passes, tool,
+                circleMeta: null, arcRanges: null,
+                tabs: [], tabTopZ: null, cutType: 'Profile On Line', ...orderInfo
+              });
+            }
+            subPath = null;
+          };
+          for (let i = 0; i < pts.length - 1; i++) {
+            const a = pts[i], b = pts[i+1];
+            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+            if (isOnCutOutside(mx, my)) {
+              flushSub();
+            } else {
+              if (!subPath) subPath = [{ x: a.x, y: a.y }];
+              subPath.push({ x: b.x, y: b.y });
+            }
+          }
+          flushSub();
+        });
+        continue;
+      }
+
+            // Dogbone Female: ตัดตามเส้นตรงๆ (ไม่ offset) เฉพาะ segment ที่ยาวกว่า tool diameter
       // ข้าม segment สั้น (notch/relief) — จัดกลุ่ม segment ยาวติดกันเป็น sub-path เดียว
       if (op === 'Dogbone Female') {
         const minLen = (tool && tool.diameter) ? tool.diameter : 6;
