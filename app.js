@@ -1130,7 +1130,7 @@
   $('btnExportZip').addEventListener('click', async () => {
     const ready = tabs.filter(t => t.gcode);
     if (!ready.length) { setWarn(['ยังไม่มี G-code ให้ Export — กด "สร้าง G-code ทุกไฟล์" ก่อน']); return; }
-    const defaultName = (Gcode_Output);
+    const defaultName = 'Gcode_output';
     const input = window.prompt('ชื่อไฟล์ ZIP (ไม่ต้องใส่นามสกุล)', defaultName);
     if (input === null) return; // กด Cancel
     const safeName = (input.trim() || defaultName).replace(/[/\\:*?"<>|]/g, '_');
