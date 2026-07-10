@@ -298,11 +298,15 @@
       }
     });
 
+    const fileMeta = parseFilenameMeta(file.name);
+    const tabThickness = fileMeta.thickness !== null ? fileMeta.thickness : state.machine.woodThickness;
     const tab = {
       id, fileName: file.name, dxf: parsed, layerColor, layerVisible,
       lastJob: null, gcode: '', stats: null,
       doorMode: MC.defaultDoorMode(state.tools), lastDoors: null,
-      isBottom: /bottom/i.test(file.name) // ตรวจจับไฟล์ Bottom จากชื่อไฟล์
+      isBottom: /bottom/i.test(file.name),
+      woodThickness: tabThickness,   // per-tab ความหนาไม้ (parse จากชื่อไฟล์หรือ fallback global)
+      woodColor: fileMeta.color || '' // per-tab สีไม้ (ใช้จัดโฟลเดอร์ใน ZIP)
     };
     tabs.push(tab);
     activeTabId = id;
@@ -312,7 +316,8 @@
     renderMapping();
     fitView();
     refreshOutputFileSelect();
-    syncView3DIfActive(); // ถ้าเปิดโหมด 3D อยู่ ให้ตามไฟล์ใหม่ที่เพิ่งเปิดทันที (กันภาพค้างเป็นไฟล์เก่า)
+    syncThicknessBox(); // อัปเดต input ความหนาไม้ให้ตรงกับ tab ใหม่
+    syncView3DIfActive();
   }
 
   function closeTab(id) {
@@ -328,7 +333,7 @@
       const el = document.createElement('div');
       el.className = 'filetab' + (t.id === activeTabId ? ' active' : '');
       el.innerHTML = `<span>${t.fileName}${t.isBottom ? ' <span class="badge-bottom" title="Bottom file — cut_outside_ จะถูกข้าม">[B]</span>' : ''}</span><span class="ft-close" title="ปิดไฟล์นี้">✕</span>`;
-      el.querySelector('span').addEventListener('click', () => { if (guard3D()) return; activeTabId = t.id; renderFileTabs(); renderLayerList(); refreshLayerPaneMode(); fitView(); render(); syncView3DIfActive(); });
+      el.querySelector('span').addEventListener('click', () => { if (guard3D()) return; activeTabId = t.id; renderFileTabs(); renderLayerList(); refreshLayerPaneMode(); fitView(); render(); syncView3DIfActive(); syncThicknessBox(); });
       el.querySelector('.ft-close').addEventListener('click', (ev) => { ev.stopPropagation(); if (guard3D()) return; closeTab(t.id); });
       host.appendChild(el);
     });
@@ -338,21 +343,93 @@
     if (guard3D()) { e.preventDefault(); return; } // กันไว้ก่อนที่ native file dialog จะเปิดขึ้นเลย
   });
 
+    /* =========================================================================
+   * Drag & Drop ทั้งหน้า — รับ .dxf, .zip, และโฟลเดอร์
+   * ====================================================================== */
+  (function initDropZone() {
+    let dragDepth = 0;
+    const overlay = $('dropOverlay');
+    document.addEventListener('dragenter', e => {
+      if (!e.dataTransfer.types.includes('Files')) return;
+      dragDepth++;
+      if (dragDepth === 1) overlay.hidden = false;
+    });
+    document.addEventListener('dragleave', () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) overlay.hidden = true;
+    });
+    document.addEventListener('dragover', e => {
+      if (!e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    document.addEventListener('drop', async e => {
+      e.preventDefault();
+      dragDepth = 0;
+      overlay.hidden = true;
+      if (guard3D()) return;
+      const items = Array.from(e.dataTransfer.items || []);
+      const collected = [];
+      async function scanEntry(entry) {
+        if (entry.isFile) {
+          await new Promise(res => entry.file(f => {
+            if (/\.dxf$/i.test(f.name)) collected.push(f);
+            else if (/\.zip$/i.test(f.name)) collected.push({ _zip: true, file: f });
+            res();
+          }));
+        } else if (entry.isDirectory) {
+          await new Promise(res => {
+            const reader = entry.createReader();
+            reader.readEntries(async entries => {
+              for (const e2 of entries) await scanEntry(e2);
+              res();
+            });
+          });
+        }
+      }
+      for (const item of items) {
+        if (item.kind !== 'file') continue;
+        const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+        if (entry) await scanEntry(entry);
+        else {
+          const f = item.getAsFile();
+          if (f && /\.dxf$/i.test(f.name)) collected.push(f);
+          else if (f && /\.zip$/i.test(f.name)) collected.push({ _zip: true, file: f });
+        }
+      }
+      await openFilesOrZips(collected);
+    });
+  })();
+
+  async function openFilesOrZips(fileList) {
+    const dxfFiles = [];
+    for (const item of fileList) {
+      if (item._zip) {
+        try {
+          const buf = await item.file.arrayBuffer();
+          const zip = await JSZip.loadAsync(buf);
+          for (const [name, zipEntry] of Object.entries(zip.files)) {
+            if (/\.dxf$/i.test(name) && !zipEntry.dir) {
+              const text = await zipEntry.async('string');
+              dxfFiles.push(new File([text], name.split('/').pop(), { type: 'text/plain' }));
+            }
+          }
+        } catch (err) { setWarn(['แตก ZIP ไม่สำเร็จ: ' + err.message]); }
+      } else {
+        dxfFiles.push(item);
+      }
+    }
+    if (!dxfFiles.length) return;
+    if (tabs.length) [...tabs].forEach(t => closeTab(t.id));
+    for (const f of dxfFiles) await addDxfFile(f);
+  }
+
   $('dxfInput').addEventListener('change', async (e) => {
-    if (guard3D()) { e.target.value = ''; return; } // กันชั้นที่ 2 เผื่อมีไฟล์เข้ามาทางอื่น (เช่น drag&drop ในอนาคต)
+    if (guard3D()) { e.target.value = ''; return; }
     const files = Array.from(e.target.files || []);
     if (!files.length) { e.target.value = ''; return; }
-    // บังคับปิดงานเดิมทั้งหมดก่อนเปิดไฟล์ชุดใหม่เสมอ (กันความหนาไม้/สถานะของไฟล์ก่อนหน้าปนกับชุดใหม่)
-    if (tabs.length) [...tabs].forEach(t => closeTab(t.id));
-    // เดาความหนาไม้จากชื่อไฟล์แรกของชุดที่เปิด (รูปแบบ "18mm"/"6mm" ต้นชื่อไฟล์) — ถ้าจับไม่ได้ ใช้ค่าเดิม
-    const detected = detectThicknessFromFileName(files[0].name);
-    if (detected !== null) {
-      state.machine.woodThickness = detected;
-      const twInput = $('woodThicknessInput');
-      if (twInput) twInput.value = detected;
-      scheduleSave();
-    }
-    for (const f of files) await addDxfFile(f);
+    const wrapped = files.map(f => /\.zip$/i.test(f.name) ? { _zip: true, file: f } : f);
+    await openFilesOrZips(wrapped);
     e.target.value = '';
   });
 
@@ -900,14 +977,25 @@
    * ====================================================================== */
   function bindThicknessBox() {
     const el = $('woodThicknessInput');
-    el.value = state.machine.woodThickness;
     el.addEventListener('change', () => {
-      state.machine.woodThickness = parseFloat(el.value) || 0;
+      const val = parseFloat(el.value) || 0;
+      // บันทึกลง tab ที่ active (per-tab) และ global fallback
+      const tab = tabs.find(t => t.id === activeTabId);
+      if (tab) tab.woodThickness = val;
+      state.machine.woodThickness = val;
       invalidateAllJobs();
-      renderMapping(); // เผื่อ Layer อื่นอ้างอิงความหนาไม้อยู่ด้วย
+      renderMapping();
       if ($('chkToolpath').checked) render();
       scheduleSave();
     });
+  }
+
+  // อัปเดต thickness input ให้แสดงค่าของ tab ปัจจุบัน (เรียกทุกครั้งที่สลับ tab)
+  function syncThicknessBox() {
+    const el = $('woodThicknessInput');
+    if (!el) return;
+    const tab = tabs.find(t => t.id === activeTabId);
+    el.value = tab ? tab.woodThickness : state.machine.woodThickness;
   }
 
   // พยายามอ่านความหนาจากชื่อไฟล์ (รูปแบบ "18mm" หรือ "6mm" ที่ต้นชื่อไฟล์ เช่น 18MM_001.dxf)
@@ -1008,15 +1096,23 @@
     return m;
   }
   function computeJob(tab) {
+    // สร้าง machine object ที่ override woodThickness ด้วยค่าของ tab นี้โดยเฉพาะ
+    const tabMachine = Object.assign({}, state.machine, {
+      woodThickness: tab.woodThickness || state.machine.woodThickness
+    });
+    const tabToRealZ = (depthPositive) => {
+      const d = Math.abs(parseFloat(depthPositive) || 0);
+      return tabMachine.z0Mode === 'table' ? (tabMachine.woodThickness || 0) - d : -d;
+    };
     if (tab.doorMode && tab.doorMode.enabled) {
       const dm = tab.doorMode;
-      const borderDepthNum = evalDepthExpr(dm.borderDepth, state.machine);
+      const borderDepthNum = evalDepthExpr(dm.borderDepth, tabMachine);
       const resolvedDoorMode = Object.assign({}, dm, { borderDepth: isFinite(borderDepthNum) ? borderDepthNum : 0 });
-      const res = TP.generateDoorProfile(tab.dxf, resolvedDoorMode, state.tools, state.machine, toRealZ);
+      const res = TP.generateDoorProfile(tab.dxf, resolvedDoorMode, state.tools, tabMachine, tabToRealZ);
       tab.lastJob = { operations: res.operations, warnings: res.warnings };
       tab.lastDoors = res.doors;
     } else {
-      tab.lastJob = TP.generate(tab.dxf, mappingsForTab(tab), state.tools, state.machine, toRealZ);
+      tab.lastJob = TP.generate(tab.dxf, mappingsForTab(tab), state.tools, tabMachine, tabToRealZ);
       tab.lastDoors = null;
     }
     return tab.lastJob;
@@ -1121,10 +1217,16 @@
     const sel = $('outputFileSelect');
     sel.innerHTML = tabs.map(t => `<option value="${t.id}">${t.fileName}</option>`).join('');
     sel.onchange = () => showOutputFor(sel.value);
+    // ล้าง output ถ้า tab ที่เลือกอยู่ยังไม่มี G-code
+    const activeSel = sel.value || (tabs[0] && tabs[0].id);
+    if (activeSel) showOutputFor(activeSel);
   }
   function showOutputFor(tabId) {
     const tab = tabs.find(t => t.id === tabId);
-    $('gcodeOut').value = tab ? tab.gcode : '';
+    const gc = tab ? tab.gcode : '';
+    $('gcodeOut').value = gc;
+    // ล้าง stats ถ้ายังไม่มี G-code
+    if (!gc) $('gStats').innerHTML = 'ยังไม่ได้สร้าง G-code';
   }
 
   $('btnExportZip').addEventListener('click', async () => {
@@ -1132,9 +1234,15 @@
     if (!ready.length) { setWarn(['ยังไม่มี G-code ให้ Export — กด "สร้าง G-code ทุกไฟล์" ก่อน']); return; }
     const defaultName = 'Gcode_output';
     const input = window.prompt('ชื่อไฟล์ ZIP (ไม่ต้องใส่นามสกุล)', defaultName);
-    if (input === null) return; // กด Cancel
+    if (input === null) return;
     const safeName = (input.trim() || defaultName).replace(/[/\\:*?"<>|]/g, '_');
-    const files = ready.map(t => ({ name: t.fileName.replace(/\.dxf$/i, '') + '.nc', content: t.gcode }));
+    const files = ready.map(t => {
+      const ncName = t.fileName.replace(/\.dxf$/i, '') + '.nc';
+      const color = (t.woodColor || '').replace(/[/\\:*?"<>|]/g, '_');
+      const thick = (t.woodThickness || state.machine.woodThickness || '') + 'mm';
+      const folder = color ? `${color}_${thick}` : '_ungrouped';
+      return { name: `${folder}/${ncName}`, content: t.gcode };
+    });
     try {
       await PS.downloadZip(safeName + '.zip', files);
     } catch (err) { setWarn(['สร้างไฟล์ zip ไม่สำเร็จ: ' + err.message]); }
