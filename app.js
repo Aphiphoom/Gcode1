@@ -998,11 +998,22 @@
     el.value = tab ? tab.woodThickness : state.machine.woodThickness;
   }
 
-  // พยายามอ่านความหนาจากชื่อไฟล์ (รูปแบบ "18mm" หรือ "6mm" ที่ต้นชื่อไฟล์ เช่น 18MM_001.dxf)
-  // คืนค่าตัวเลข (mm) ถ้าจับได้ ไม่งั้นคืน null (ไม่แก้ค่าเดิม)
+  // parse ชื่อไฟล์ DXF หา color และ thickness รองรับ 2 รูปแบบ:
+  //   แหล่ง 1: sheet1-top-[0134_DimGray]-18.dxf  → color=0134_DimGray, thickness=18
+  //   แหล่ง 2: COLOR_M00_18MM_005.dxf             → color=M00, thickness=18
+  function parseFilenameMeta(fileName) {
+    let m;
+    m = fileName.match(/\[([^\]]+)\]-?(\d+(?:\.\d+)?)\.(dxf)$/i);
+    if (m) return { color: m[1], thickness: parseFloat(m[2]) };
+    m = fileName.match(/COLOR_([^_]+)_(\d+(?:\.\d+)?)MM/i);
+    if (m) return { color: m[1], thickness: parseFloat(m[2]) };
+    m = fileName.match(/-(\d+(?:\.\d+)?)\.(dxf)$/i);
+    if (m) return { color: '', thickness: parseFloat(m[1]) };
+    return { color: '', thickness: null };
+  }
+
   function detectThicknessFromFileName(fileName) {
-    const m = fileName.match(/^(\d+(?:\.\d+)?)\s*mm/i);
-    return m ? parseFloat(m[1]) : null;
+    return parseFilenameMeta(fileName).thickness;
   }
 
 
