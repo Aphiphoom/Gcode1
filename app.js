@@ -346,7 +346,7 @@
     /* =========================================================================
    * Drag & Drop ทั้งหน้า — รับ .dxf, .zip, และโฟลเดอร์
    * ====================================================================== */
-  (function initDropZone() {
+  function initDropZone() {
     let dragDepth = 0;
     const overlay = $('dropOverlay');
     document.addEventListener('dragenter', e => {
@@ -399,7 +399,7 @@
       }
       await openFilesOrZips(collected);
     });
-  })();
+  }
 
   async function openFilesOrZips(fileList) {
     const dxfFiles = [];
@@ -1333,6 +1333,7 @@
     resizeCanvas();
     fitView();
     refreshOutputFileSelect();
+    initDropZone();
     window.addEventListener('resize', resizeCanvas);
   }
 
