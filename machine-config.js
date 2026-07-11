@@ -3,7 +3,7 @@
  * -----------------------------------------------------------------------------
  * สถานะกลางของแอป + ค่าตั้งต้น
  *   - Machine Setup: units, safeZ, rapidClearance, pocketStepover,
- *     woodThickness, originCorner (มุมอ้างอิง X0Y0 จาก _ABF_SHEET_BORDER),
+ *     woodThickness, originCorner (มุมอ้างอิง X0Y0),
  *     z0Mode ('top' ผิวไม้ / 'table' พื้นโต๊ะตัด), cutDeeper
  *   - Tool Library: เพิ่ม isOutsideTool (ทูลหลักสำหรับตัดนอก)
  *   - Layer Mapping: จดจำถาวรผูกกับชื่อ Layer ข้ามไฟล์ (เก็บใน savedMappings)
