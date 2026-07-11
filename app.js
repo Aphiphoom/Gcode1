@@ -1042,9 +1042,9 @@
       ${N('tabCount', 'Tab Count', '1')}
       <hr class="form-divider">
       ${N('smallPartThreshold', 'ชิ้นงานขนาดเล็ก (mm)', '1')}
-      <small class="hint" style="grid-column:1/-1">ด้านแคบที่สุดของชิ้นงานที่ถือว่า "เล็ก" (0 = ปิด) — ใช้กับ layer ที่ขึ้นต้นด้วย cut_outside_</small>
+      <small class="hint" style="grid-column:1/-1">ด้านแคบที่สุดของชิ้นงานที่ถือว่า "เล็ก" (0 = ปิด)</small>
       ${N('smallPartFinalPass', 'ความหนาตัดรอบสุดท้าย (mm)', '0.5')}
-      <small class="hint" style="grid-column:1/-1">รอบพิเศษก่อนตัดขาด สำหรับชิ้นเล็กเท่านั้น (0 = ไม่เพิ่มรอบพิเศษ)</small>
+     
       ${N('smallPartFinalFeed', 'ความเร็วตัดรอบสุดท้าย (mm/min)', '10')}
       <small class="hint" style="grid-column:1/-1">feed rate เฉพาะ pass สุดท้ายของชิ้นเล็ก (0 = ใช้ค่าเดิมของดอก)</small>`;
     host.querySelector('[data-k="originCorner"]').value = m.originCorner;
