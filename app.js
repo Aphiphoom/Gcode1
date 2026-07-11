@@ -1042,7 +1042,7 @@
       ${N('tabCount', 'Tab Count', '1')}
       <hr class="form-divider">
       ${N('smallPartThreshold', 'ชิ้นงานขนาดเล็ก (mm)', '1')}
-      <small class="hint" style="grid-column:1/-1">ด้านแคบที่สุดของชิ้นงานที่ถือว่า "เล็ก" (0 = ปิด)</small>
+      <small class="hint" style="grid-column:1/-1">ด้านแคบที่สุดของชิ้นงานที่ถือว่าเล็ก (0 = ปิด)</small>
       ${N('smallPartFinalPass', 'ความหนาตัดรอบสุดท้าย (mm)', '0.5')}
      
       ${N('smallPartFinalFeed', 'ความเร็วตัดรอบสุดท้าย (mm/min)', '10')}
