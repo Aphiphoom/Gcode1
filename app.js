@@ -1046,7 +1046,7 @@
       ${N('smallPartFinalPass', 'ความหนาตัดรอบสุดท้าย (mm)', '0.5')}
      
       ${N('smallPartFinalFeed', 'ความเร็วตัดรอบสุดท้าย (mm/min)', '10')}
-      
+       <small class="hint" style="grid-column:1/-1">feed rate เฉพาะ pass สุดท้ายของชิ้นเล็ก (0 = ใช้ค่าเดิมของดอก)</small>`;
     host.querySelector('[data-k="originCorner"]').value = m.originCorner;
     host.querySelector('[data-k="z0Mode"]').value = m.z0Mode;
     host.querySelectorAll('input, select').forEach(el => el.addEventListener('change', () => {
