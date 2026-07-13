@@ -1028,7 +1028,7 @@
       ${N('rapidClearance', 'Rapid Clearance (mm)', '0.5')}
       ${N('pocketStepover', 'Pocket Stepover (%)', '5')}
       ${N('cutDeeper', 'Cut Deeper (mm)', '0.1')}
-      <label class="fld"><span>จุดอ้างอิง X0Y0 (มุมของ _ABF_SHEET_BORDER)</span>
+      <label class="fld"><span>จุดอ้างอิง X0Y0 </span>
         <select data-k="originCorner">
           <option value="bottom-left">มุมล่างซ้าย</option>
           <option value="bottom-right">มุมล่างขวา</option>
@@ -1036,15 +1036,15 @@
           <option value="top-right">มุมบนขวา</option>
         </select></label>
       <label class="fld"><span>จุดอ้างอิง Z0</span>
-        <select data-k="z0Mode"><option value="top">ผิวบนของไม้</option><option value="table">พื้น Top โต๊ะตัด (สเปกบอร์ด)</option></select></label>
+        <select data-k="z0Mode"><option value="top">ผิวบนของชิ้นงาน</option><option value="table">ผิว Top โต๊ะตัด</option></select></label>
       ${N('tabWidth', 'Tab Width (mm)', '0.5')}
       ${N('tabHeight', 'Tab Height (mm)', '0.5')}
       ${N('tabCount', 'Tab Count', '1')}
       <hr class="form-divider">
       ${N('smallPartThreshold', 'ชิ้นงานขนาดเล็ก (mm)', '1')}
-      <small class="hint" style="grid-column:1/-1">ด้านแคบที่สุดของ bounding box ที่ถือว่า "เล็ก" (0 = ปิด) — ใช้กับ layer ที่ขึ้นต้นด้วย cut_outside_</small>
+      <small class="hint" style="grid-column:1/-1">ด้านแคบที่สุดของชิ้นงาน (0 = ปิด)</small>
       ${N('smallPartFinalPass', 'ความหนาตัดรอบสุดท้าย (mm)', '0.5')}
-      <small class="hint" style="grid-column:1/-1">รอบพิเศษก่อนตัดขาด สำหรับชิ้นเล็กเท่านั้น (0 = ไม่เพิ่มรอบพิเศษ)</small>
+      <small class="hint" style="grid-column:1/-1">ความหนารอบพิเศษก่อนตัดขาด สำหรับชิ้นเล็กเท่านั้น (0 = ไม่เพิ่มรอบพิเศษ)</small>
       ${N('smallPartFinalFeed', 'ความเร็วตัดรอบสุดท้าย (mm/min)', '10')}
       <small class="hint" style="grid-column:1/-1">feed rate เฉพาะ pass สุดท้ายของชิ้นเล็ก (0 = ใช้ค่าเดิมของดอก)</small>`;
     host.querySelector('[data-k="originCorner"]').value = m.originCorner;
