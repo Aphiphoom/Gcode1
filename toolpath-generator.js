@@ -237,7 +237,9 @@
         const o = t.length,
             r = t.map(t => n(t)),
             s = r.map(i),
-            a = r.map(t => Math.abs(e(t))),
+            // ใช้ bounding box area แทน signed area เพื่อให้ concave polygon (ตัว U, L, C)
+            // มี "ขนาด" ที่สะท้อนพื้นที่จริงที่ครอบครอง ไม่ใช่ signed polygon area ที่เล็กกว่าความเป็นจริง
+            a = r.map(pts => { const xs = pts.map(p => p.x), ys = pts.map(p => p.y); return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys)); }),
             c = new Array(o).fill(0);
         for (let t = 0; t < o; t++)
             for (let e = 0; e < o; e++) t !== e && a[e] > a[t] && h(s[t], r[e]) && c[t]++;
@@ -475,7 +477,7 @@
             }), o.length < 2) return t.slice().sort((t, e) => c(t.points) - c(e.points));
         const r = o.length,
             s = o.map(e => n(t[e].points)),
-            a = s.map(t => Math.abs(e(t))),
+            a = s.map(pts => { const xs = pts.map(p => p.x), ys = pts.map(p => p.y); return (Math.max(...xs)-Math.min(...xs)) * (Math.max(...ys)-Math.min(...ys)); }),
             l = s.map(i),
             p = new Array(r).fill(-1);
         for (let t = 0; t < r; t++) {
