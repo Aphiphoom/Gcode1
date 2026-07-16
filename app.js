@@ -264,10 +264,10 @@
         const o = T();
         o && (function(e) {
             D.strokeStyle = "rgba(180,190,200,0.55)", D.lineWidth = 1.2, D.setLineDash([6, 4]);
-            for (const t of e.dxf.entities) t.layer === m && A(t.points);
+            for (const t of e.dxf.entities) t.layer === m && A(t.points, t.closed);
             D.setLineDash([])
         }(o), function(e) {
-            for (const t of e.dxf.entities) t.layer !== m && -1 === f.indexOf(t.layer) && !1 !== e.layerVisible[t.layer] && (D.strokeStyle = e.layerColor[t.layer] || "#cccccc", D.lineWidth = 1.4, A(t.points))
+            for (const t of e.dxf.entities) t.layer !== m && -1 === f.indexOf(t.layer) && !1 !== e.layerVisible[t.layer] && (D.strokeStyle = e.layerColor[t.layer] || "#cccccc", D.lineWidth = 1.4, A(t.points, t.closed))
         }(o), o.doorMode && o.doorMode.enabled && function(e) {
             e.lastDoors || le(e);
             if (!e.lastDoors) return;
@@ -306,7 +306,7 @@
         }(o))
     }
 
-    function A(e) {
+    function A(e, closed) {
         if (!e || e.length < 2) return;
         D.beginPath();
         const t = F(e[0].x, e[0].y);
@@ -315,6 +315,7 @@
             const o = F(e[t].x, e[t].y);
             D.lineTo(o.x, o.y)
         }
+        if (closed) D.closePath();
         D.stroke()
     }
 
